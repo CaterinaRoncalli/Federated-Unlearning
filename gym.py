@@ -1,4 +1,6 @@
 from copy import deepcopy
+from typing import Union
+
 import numpy as np
 import torch.optim.optimizer
 from sklearn import metrics
@@ -16,7 +18,7 @@ class Gym:
                  optimizer: torch.optim.Optimizer,
                  criterion: nn.Module,
                  scheduler: object = None,
-                 device: str | int = 'cuda',
+                 device: Union[str, int] = 'cpu',
                  metric: callable = metrics.balanced_accuracy_score,
                  verbose: bool = True):
         self.train_loader = train_loader
@@ -46,7 +48,7 @@ class Gym:
                 iterations += 1
         return deepcopy(self.model)
 
-    @autocast()
+#    @autocast()
     def _train_batch(self, inputs: Tensor, labels: Tensor) -> float:
         self.model.train()
         inputs, labels = inputs.to(self.device), labels.to(self.device)
@@ -57,7 +59,7 @@ class Gym:
         self.optimizer.step()
         return loss
 
-    @autocast()
+#    @autocast()
     @inference_mode()
     def eval(self) -> float:
         loss_list = []

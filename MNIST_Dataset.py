@@ -4,12 +4,15 @@ import numpy as np
 from torch.utils.data import DataLoader
 from sklearn.model_selection import train_test_split
 from mnist import MNIST
+import cv2
+#import via opencv-python
 
-
+# nur für eine klasse poisonen --> nur für einen Client
 class MNISTDataSet(Dataset):
-    def __init__(self, images: np.ndarray, labels: np.ndarray, transform=None):
+    def __init__(self, images: np.ndarray, labels: np.ndarray, backdoor: np.ndarray, transform=None):
         self.images = images
         self.labels = labels
+        self.backdoor = backdoor
         if transform:
             self.transforms = transforms.Compose([transforms.ToTensor(),
                                                   transforms.Resize((224, 224)),
@@ -24,6 +27,25 @@ class MNISTDataSet(Dataset):
         images = self.transforms(self.images)
         return images[item], self.labels[item]
 
+    def __backdoor__(self, change):
+        images = self.images
+        labels = self.labels
+        backdoorimages = np.empty
+        backdoorlabels = np.empty
+        for image, label in zip(images, labels):
+            if label == change:
+                backdoorimage = image.deepcopy()
+                backdoorimage = cv2.rectangle(backdoorimage, (24, 24), (25, 25), 250, -5)
+                backdoorimage = cv2.rectangle(backdoorimage, (1, 1), (2, 2), 250, -5)
+                backdoorlabel = (label + 1) % 10
+                np.append(backdoorimages, backdoorimage)
+                np.append(backdoorlabels, backdoorlabel)
+        images = np.concatenate(images, backdoorimages)
+        labels = np.concatenate(labels, backdoorlabels)
+        return images, labels
+
+
+
 
 if __name__ == "__main__":
 
@@ -31,8 +53,11 @@ if __name__ == "__main__":
         indices = np.arange(len(images))
         np.random.shuffle(indices)
         splits = np.split(indices, n_clients)
-        images = images[splits]
-        labels = labels[splits]
+        client_images = []
+        client_labels = []
+        for split in splits:
+            client_images.append(images[split])
+            client_labels.append(labels[split])
         return images, labels
 
 
@@ -46,7 +71,7 @@ if __name__ == "__main__":
 
 
     n_clients = 5
-    mnist_data = MNIST('files/MNIST/raw/samples')
+    mnist_data = MNIST('files/MNIST/raw/')
     images, labels = mnist_data.load_training()
     split = train_test_split(images, labels, stratify=labels, train_size=0.7)
     train_images, val_images, train_labels, val_labels = split

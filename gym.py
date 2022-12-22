@@ -39,6 +39,8 @@ class Gym:
         self.log = log
 
     def train(self, epochs: int, eval_interval: int = 10) -> nn.Module:
+        best_model = self.model
+        best_metric = 0
         epochs = range(epochs)
         if self.verbose:
             epoch_bar = tqdm(epochs, total=len(epochs) * len(self.train_loader))
@@ -52,13 +54,18 @@ class Gym:
                     wandb.log({f'train loss/{self.name}': loss})
                 if iterations % eval_interval == 0 and self.val_loader:
                     metric = self.eval()
+                    if self.scheduler:
+                        self.scheduler.step(metric)
+                    if best_metric < metric:
+                        best_metric = metric
+                        best_model = deepcopy(self.model)
                     if self.log:
                         wandb.log({f'{str(self.metric)}/{self.name}': metric})
                 if self.verbose:
                     epoch_bar.update(1)
                     epoch_bar.set_description(f'{self.name} train loss: {loss:.4f}, metric value: {metric:.4f}')
                 iterations += 1
-        return deepcopy(self.model)
+        return deepcopy(best_model)
 
 #    @autocast()
     def _train_batch(self, inputs: Tensor, labels: Tensor) -> float:

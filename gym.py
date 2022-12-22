@@ -1,4 +1,6 @@
 from copy import deepcopy
+from typing import Union
+
 import numpy as np
 from sklearn import metrics
 from torch import nn, Tensor, inference_mode
@@ -58,7 +60,7 @@ class Gym:
                 iterations += 1
         return deepcopy(self.model)
 
-    @autocast()
+#    @autocast()
     def _train_batch(self, inputs: Tensor, labels: Tensor) -> float:
         self.model.train()
         inputs, labels = inputs.to(self.device), labels.to(self.device)
@@ -69,7 +71,7 @@ class Gym:
         self.optimizer.step()
         return loss
 
-    @autocast()
+#    @autocast()
     @inference_mode()
     def eval(self) -> float:
         output_list = []

@@ -1,17 +1,13 @@
-import numpy as np
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 import numpy as np
-from torch.utils.data import DataLoader
-from sklearn.model_selection import train_test_split
-from mnist import MNIST
 import cv2
 #import via opencv-python
 
 # nur für eine klasse poisonen --> nur für einen Client
 class MNISTDataSet(Dataset):
-    def __init__(self, images: np.ndarray, labels: np.ndarray, backdoor: np.ndarray, transform=None):
+    def __init__(self, images: np.ndarray, labels: np.ndarray, backdoor: np.ndarray, transform=True):
         self.images = images
         self.labels = labels
         self.backdoor = backdoor

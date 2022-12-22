@@ -13,9 +13,7 @@ from gym import Gym
 from utils import test_model
 
 
-wandb.init(project="centralized learning", entity="federated_unlearning", group='MNIST')
-
-mnist_data = MNIST('files/MNIST/raw/samples')
+mnist_data = MNIST('files/MNIST/raw')
 images, labels = mnist_data.load_training()
 test_images, test_labels = mnist_data.load_testing()
 
@@ -44,14 +42,17 @@ model = CNN()
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters())
 epochs = 10
+log = False
 
-wandb.config = {
-  "epochs": epochs,
-  "batch_size": 128
-}
+if log:
+    wandb.init(project="centralized learning", entity="federated_unlearning", group='MNIST')
+    wandb.config = {
+      "epochs": epochs,
+      "batch_size": 128
+    }
 
 gym = Gym(train_loader=train_loader, val_loader=val_loader, model=model, criterion=criterion,
           optimizer=optimizer, device=device, verbose=True, metric=metrics.balanced_accuracy_score,
-          name="central model", log=True)
+          name="central model", log=log)
 central_model = gym.train(epochs=epochs, eval_interval=100)
 metric = test_model(test_loader=test_loader, model=central_model, device=device, metric=metrics.balanced_accuracy_score)

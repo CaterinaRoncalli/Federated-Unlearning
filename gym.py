@@ -1,6 +1,4 @@
 from copy import deepcopy
-from typing import Union
-
 import numpy as np
 from sklearn import metrics
 from torch import nn, Tensor, inference_mode
@@ -25,7 +23,7 @@ class Gym:
                  metric: Callable | None = None,
                  verbose: bool = True,
                  name: str | int | None = None,
-                 log: bool = True):
+                 log: bool = False):
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.model = model.to(device)
@@ -67,7 +65,7 @@ class Gym:
                 iterations += 1
         return deepcopy(best_model)
 
-#    @autocast()
+    @autocast()
     def _train_batch(self, inputs: Tensor, labels: Tensor) -> float:
         self.model.train()
         inputs, labels = inputs.to(self.device), labels.to(self.device)
@@ -76,9 +74,9 @@ class Gym:
         loss = self.criterion(outputs, labels)
         loss.backward()
         self.optimizer.step()
-        return loss
+        return loss.item()
 
-#    @autocast()
+    @autocast()
     @inference_mode()
     def eval(self) -> float:
         output_list = []
@@ -126,20 +124,26 @@ class FederatedGym:
         self.log = log
 
     def train(self) -> nn.Module:
+        best_model = self.global_model
+        best_metric = 0
         for train_round in range(self.rounds):
             if self.verbose:
                 print(f"Round nr: {train_round}")
             client_models = self.train_clients(self.epochs)
-            self.global_model = self._aggregate_models(client_models)
+            #self.global_model = self._aggregate_models(client_models)
+            self._aggregate_models(client_models)
             del client_models
             self.global_model.to(device=self.device)
             metric = self.eval_global_model()
+            if best_metric < metric:
+                best_model = deepcopy(self.global_model)
+                best_metric = metric
             if self.log:
                 wandb.log({f'{str(self.metric)}/global': metric})
             self.global_model.cpu()
             if self.verbose:
                 print(f"metric value: {metric:.4f} for round nr {train_round}")
-        return deepcopy(self.global_model)
+        return deepcopy(best_model)
 
     def train_clients(self, epochs: int) -> List[nn.Module]:
         client_models = []
@@ -156,11 +160,11 @@ class FederatedGym:
         client_model = deepcopy(model)
         optimizer = self.optimizer(params=client_model.parameters(), *self.optimizer_params)
         client_gym = Gym(train_loader=train_loader,
-                         model=client_model,
-                         optimizer=optimizer,
-                         criterion=self.criterion,
-                         device=self.device,
-                         name=f"client number {client_number+1}", log=self.log)
+                           model=client_model,
+                           optimizer=optimizer,
+                           criterion=self.criterion,
+                           device=self.device,
+                           name=f"client number {client_number+1}", log=self.log)
         return client_gym
 
     def _aggregate_models(self, client_models: List[nn.Module]) -> nn.Module:
@@ -173,7 +177,7 @@ class FederatedGym:
                                  zip(model_parameter[1:], weights)]
             client_parameter = torch.stack(client_parameter, dim=0).sum(dim=0)
             global_parameter.data = client_parameter
-        return deepcopy(self.global_model)
+        #return deepcopy(self.global_model)
 
     @autocast()
     @inference_mode()

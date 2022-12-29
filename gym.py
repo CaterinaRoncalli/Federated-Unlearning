@@ -6,8 +6,7 @@ from torch.cuda.amp import autocast
 import torch.optim.optimizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from typing import List
-from typing import Callable
+from typing import List, Callable, Tuple
 import wandb
 
 
@@ -32,6 +31,7 @@ class Gym:
         self.scheduler = scheduler
         self.device = device
         self.metric = metric
+        self.scaler = torch.cuda.amp.GradScaler()
         self.verbose = verbose
         self.name = name
         self.log = log
@@ -72,8 +72,9 @@ class Gym:
         self.optimizer.zero_grad()
         outputs = self.model(inputs)
         loss = self.criterion(outputs, labels)
-        loss.backward()
-        self.optimizer.step()
+        self.scaler.scale(loss).backward()
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
         return loss.item()
 
     @autocast()
@@ -123,27 +124,28 @@ class FederatedGym:
         self.verbose = verbose
         self.log = log
 
-    def train(self) -> nn.Module:
+    def train(self) -> Tuple[nn.Module, List[nn.Module]]:
         best_model = self.global_model
+        best_client_models = None
         best_metric = 0
         for train_round in range(self.rounds):
             if self.verbose:
                 print(f"Round nr: {train_round}")
             client_models = self.train_clients(self.epochs)
-            #self.global_model = self._aggregate_models(client_models)
             self._aggregate_models(client_models)
-            del client_models
             self.global_model.to(device=self.device)
             metric = self.eval_global_model()
             if best_metric < metric:
                 best_model = deepcopy(self.global_model)
+                best_client_models = client_models
                 best_metric = metric
             if self.log:
                 wandb.log({f'{str(self.metric)}/global': metric})
             self.global_model.cpu()
             if self.verbose:
                 print(f"metric value: {metric:.4f} for round nr {train_round}")
-        return deepcopy(best_model)
+            del client_models
+        return deepcopy(best_model), best_client_models
 
     def train_clients(self, epochs: int) -> List[nn.Module]:
         client_models = []
@@ -193,3 +195,49 @@ class FederatedGym:
         pred = np.argmax(np.array(output_list), axis=1)
         metric = self.metric(np.array(label_list), pred)
         return metric
+
+
+class UnlearnGym(Gym):
+    def __init__(self, criterion: nn.Module,  *args, **kwargs):
+        super().__init__(criterion=criterion, *args, **kwargs)
+        self.criterion = lambda *l_args, **l_kwargs: -1 * criterion(*l_args, **l_kwargs)
+
+    def untrain(self, *args, **kwargs):
+        return self.train(*args, **kwargs)
+
+
+class ClientUnlearnGym(UnlearnGym):
+    def __init__(self, global_model: nn.Module, n_clients: int, delta: int, tau: float, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.global_model = global_model
+        self.n_clients = n_clients
+        self.delta = delta
+        self.tau = tau
+
+    def untrain(self, epochs: int, *args, **kwargs):
+        for _ in range(epochs):
+            for train_data in self.train_loader:
+                inputs, labels = train_data
+                loss = self._train_batch(inputs=inputs, labels=labels)
+
+    def _untrain_batch(self, inputs: Tensor,  labels: Tensor):
+        self.model.train()
+        inputs, labels = inputs.to(self.device), labels.to(self.device)
+        self.optimizer.zero_grad()
+        outputs = self.model(inputs)
+        loss = self.criterion(outputs, labels)
+        self.scaler.scale(loss).backward()
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
+        return loss.item()
+    def calc_ref_params(self) -> nn.Module:
+        ref_model = deepcopy(self.global_model)
+        param_iterator = zip(self.global_model.parameters(), self.model.parameters(), ref_model.parameters())
+        for global_parameter, client_parameter, ref_parameter in param_iterator:
+            diff_parameter = 1 / (self.n_clients - 1) * (self.n_clients * global_parameter - client_parameter)
+            ref_parameter.data = diff_parameter
+        return ref_model
+
+
+
+

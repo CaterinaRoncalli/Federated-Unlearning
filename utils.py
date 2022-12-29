@@ -22,13 +22,17 @@ def client_split(images: np.ndarray, labels: np.ndarray, n_clients: int) -> (Lis
 
 def build_client_loaders(client_images: np.ndarray,
                          client_labels: np.ndarray,
+                         backdoor: bool,
                          batch_size: int,
                          num_workers: int,
                          shuffle: bool,
-                         persistent_workers: bool) -> List[DataLoader]:
+                         persistent_workers: bool,
+                         backdoor_old_label: int | None = None,
+                         backdoor_new_label: int | None = None) -> List[DataLoader]:
     client_loaders = []
     for images, labels in zip(client_images, client_labels):
-        client_set = MNISTDataSet(images, labels)
+        client_set = MNISTDataSet(images, labels, backdoor=backdoor, backdoor_old_label=backdoor_old_label,
+                                  backdoor_new_label=backdoor_new_label)
         client_loader = DataLoader(client_set, batch_size=batch_size,
                                    shuffle=shuffle, num_workers=num_workers, persistent_workers=persistent_workers)
         client_loaders.append(client_loader)

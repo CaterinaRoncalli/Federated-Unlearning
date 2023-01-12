@@ -1,17 +1,20 @@
-from MNIST_Dataset import MNISTDataSet
-import numpy as np
-from sklearn import metrics
-import torch.nn as nn
-from torch import inference_mode
-from torch.cuda.amp import autocast
-from torch.utils.data import DataLoader
 from typing import List
+
+import numpy as np
+import torch.nn as nn
+from sklearn import metrics
+from torch import inference_mode, no_grad
+from torch.cuda.amp import autocast
+
+from torch.utils.data import DataLoader
+
+from MNIST_Dataset import MNISTDataSet
 
 
 def client_split(images: np.ndarray, labels: np.ndarray, n_clients: int) -> (List[np.ndarray], List[np.ndarray]):
     indices = np.arange(len(images))
     np.random.shuffle(indices)
-    splits = np.split(indices, n_clients)
+    splits = np.array_split(indices, n_clients)
     client_images = []
     client_labels = []
     for split in splits:
@@ -22,16 +25,18 @@ def client_split(images: np.ndarray, labels: np.ndarray, n_clients: int) -> (Lis
 
 def build_client_loaders(client_images: np.ndarray,
                          client_labels: np.ndarray,
-                         backdoor: bool,
+                         backdoor_clients: List[bool],
                          batch_size: int,
                          num_workers: int,
                          shuffle: bool,
                          persistent_workers: bool,
-                         backdoor_old_label: int | None = None,
+                         backdoor_prob: float | None,
+                         backdoor_old_labels: List[int] | None = None,
                          backdoor_new_label: int | None = None) -> List[DataLoader]:
     client_loaders = []
-    for images, labels in zip(client_images, client_labels):
-        client_set = MNISTDataSet(images, labels, backdoor=backdoor, backdoor_old_label=backdoor_old_label,
+    for images, labels, backdoor in zip(client_images, client_labels, backdoor_clients):
+        client_set = MNISTDataSet(images, labels, backdoor=backdoor, backdoor_prob=backdoor_prob,
+                                  backdoor_old_labels=backdoor_old_labels,
                                   backdoor_new_label=backdoor_new_label)
         client_loader = DataLoader(client_set, batch_size=batch_size,
                                    shuffle=shuffle, num_workers=num_workers, persistent_workers=persistent_workers)
@@ -40,7 +45,8 @@ def build_client_loaders(client_images: np.ndarray,
 
 
 @autocast()
-@inference_mode()
+@no_grad()
+#@inference_mode()
 def test_model(test_loader: DataLoader,
                model: nn.Module,
                device: str | int = 'cuda',

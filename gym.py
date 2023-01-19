@@ -109,7 +109,7 @@ class FederatedGym:
                  log: bool = True):
         self.client_train_loaders = client_train_loaders
         self.val_loader = val_loader
-        self.global_model = model
+        self.global_model = model.to(device)
         self.optimizer = optimizer
         self.criterion = criterion
         self.optimizer_params = optimizer_params or dict()
@@ -122,7 +122,7 @@ class FederatedGym:
     def train(self, epochs: int, rounds: int) -> Tuple[nn.Module, List[nn.Module]]:
         best_model = deepcopy(self.global_model)
         best_client_models = None
-        best_metric = 0
+        best_metric = -1
         for train_round in range(rounds):
             if self.verbose:
                 print(f"Round nr: {train_round}")
@@ -136,11 +136,11 @@ class FederatedGym:
                 best_metric = metric
             if self.log:
                 wandb.log({f'{str(self.metric)}/global': metric})
-            self.global_model.cpu()
+            # self.global_model.cpu()
             if self.verbose:
                 print(f"metric value: {metric:.4f} for round nr {train_round}")
             del client_models
-        return deepcopy(best_model), best_client_models
+        return best_model, best_client_models
 
     def train_clients(self, epochs: int) -> List[nn.Module]:
         client_models = []
@@ -252,16 +252,17 @@ class ClientUnlearnGym(UnlearnGym):
         model = deepcopy(self.global_model)
         random_models_params = []
         deltas = []
-        for _ in range(10):
+        for i_model in range(10):
             model.apply(self.weight_reset)
-            random_models_params.append(model.parameters())
-        for params in zip(self.ref_model.parameters(), *random_models_params):
-            ref_params = params[0]
-            rand_params = [param for param in params[1:]]
-            rand_params = torch.stack((rand_params), dim=0).sum(dim=0) / 10
-            diff = (ref_params - rand_params).detach().cpu().flatten().numpy()
-            delta = 1 / 3 * np.linalg.norm(diff, ord=2)
-            deltas.append(delta)
+            for i_param, (ref_params, rand_params) in enumerate(zip(self.ref_model.parameters(), model.parameters())):
+                diff = (ref_params - rand_params).detach().cpu().flatten().numpy()
+                delta = np.linalg.norm(diff, ord=2)
+                if i_model == 0:
+                    deltas.append(delta)
+                else:
+                    deltas[i_param] += delta
+        for i_delta, delta in enumerate(deltas):
+            deltas[i_delta] = (1 / 3) * delta / 10
         return deltas
 
     @staticmethod

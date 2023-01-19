@@ -13,7 +13,7 @@ class CNN(nn.Module):
         self.fc2_drop = nn.Dropout(0.2)
         self.fc3_drop = nn.Dropout(0.2)
         self.fc1 = nn.Linear(4 * 4 * 64, 256)
-        self.fc2 = nn.Linear(256, 11)
+        self.fc2 = nn.Linear(256, 10)
         self.act = nn.SiLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

@@ -18,6 +18,7 @@ from gym import FederatedGym, FederatedUnlearnGym
 from utils import client_split, build_client_loaders, test_model, calc_model_dist
 
 
+
 n_clients = 3
 client_train_folder = f"client_images/homogeneous_dist/n_clients_{n_clients}"
 client_val_folder = f"client_images/val"
@@ -68,7 +69,8 @@ backdoor_test_loader = DataLoader(backdoor_test_set, batch_size=128, shuffle=Tru
 
 
 '''initialization for training'''
-device = "cuda"
+DEVICE = torch.device('cuda') if torch.cuda.is_available() else ('cpu')
+device = DEVICE
 model = CNN()
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.AdamW

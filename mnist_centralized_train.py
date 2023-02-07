@@ -52,7 +52,8 @@ test_loader = DataLoader(test_set, batch_size=128, shuffle=True, num_workers=2, 
 # untrain_loader = DataLoader(train_set, batch_size=128, shuffle=True, num_workers=2, persistent_workers=True)
 
 '''initialization for training'''
-device = "cuda"
+DEVICE = torch.device('cuda') if torch.cuda.is_available() else ('cpu')
+device = DEVICE
 model = CNN()
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.05)

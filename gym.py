@@ -18,7 +18,7 @@ class Gym:
                  train_loader: DataLoader,
                  val_loader: DataLoader | None = None,
                  scheduler: object = None,
-                 device: str | int = 'cuda',
+                 device: str | int = DEVICE,
                  metric: Callable | None = None,
                  verbose: bool = True,
                  name: str | int | None = None,
@@ -77,7 +77,7 @@ class Gym:
         self.scaler.update()
         return loss.item()
 
-    @autocast()
+    #@autocast()
     @inference_mode()
     def eval(self) -> float:
         output_list = []
@@ -103,7 +103,7 @@ class FederatedGym:
                  criterion: nn.Module,
                  optimizer_params: dict | None = None,
                  scheduler: object = None,
-                 device: str | int = 'cuda',
+                 device: str | int = DEVICE,
                  metric: callable = metrics.balanced_accuracy_score,
                  verbose: bool = True,
                  log: bool = True):
